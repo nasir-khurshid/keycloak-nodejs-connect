@@ -3822,6 +3822,289 @@ class KeycloakService extends Keycloak {
     */
   }
 
+  async getCXUserDetails( user_name ) {
+
+    return new Promise( async ( resolve, reject ) => {
+
+      let token;
+      let refresh_token;
+      let error;
+      let responseObject;
+      user_name = ( user_name ).toLowerCase();
+
+      let URL = keycloakConfig[ "auth-server-url" ] + "realms/" + keycloakConfig[ "realm" ] + "/protocol/openid-connect/token";
+
+      //keycloakConfig["auth-server-url"] +'realms
+      let config = {
+
+        method: "post",
+        url: URL,
+        headers: {
+          Accept: "application/json",
+          "cache-control": "no-cache",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        data: {
+          username: user_name,
+          password: keycloakConfig[ "SYNC_AGENT_PASSWORD" ],
+          client_id: keycloakConfig.CLIENT_ID,
+          client_secret: keycloakConfig.credentials.secret,
+          grant_type: keycloakConfig.GRANT_TYPE,
+        },
+
+      };
+
+      try {
+
+        //  T.O.K.E.N   R.E.Q.U.E.S.T   # 1   ( P.E.R.M.I.S.S.I.O.N.S   N.O.T    I.N.C.L.U.D.E.D)
+        let tokenResponse = await requestController.httpRequest( config, true );
+
+        if ( tokenResponse.data.access_token ) {
+
+          token = tokenResponse.data.access_token;
+
+          //To fetch introspect token to handle errors.
+          let config_introspect = { ...config };
+          config_introspect.data.token = token;
+          delete config_introspect.data.username;
+          delete config_introspect.data.password;
+
+          config_introspect.url = URL + "/introspect";
+
+          try {
+
+            let intro_token_response = await requestController.httpRequest( config_introspect, true );
+
+            if ( Object.keys( intro_token_response.data ).length > 0 ) {
+
+              try {
+
+                let config1 = { ...config };
+                config1.data.username = keycloakConfig.USERNAME_ADMIN;
+                config1.data.password = keycloakConfig.PASSWORD_ADMIN;
+                delete config1.data.token;
+
+                config1.url = keycloakConfig[ "auth-server-url" ] + "realms/" + keycloakConfig[ "realm" ] + "/protocol/openid-connect/token";
+
+                let adminTokenResponse = await requestController.httpRequest( config1, true );
+
+                if ( adminTokenResponse.data.access_token ) {
+
+                  let admin_token = adminTokenResponse.data.access_token;
+
+                  try {
+
+                    config1.headers.Authorization = "Bearer " + admin_token;
+                    config1.method = "get";
+                    config1.url = keycloakConfig[ "auth-server-url" ] + "admin/realms/" + keycloakConfig[ "realm" ] + "/users?username=" + user_name + "&exact=true";
+                    delete config1.data;
+
+                    let getuserDetails = await requestController.httpRequest( config1, true );
+
+                    if ( getuserDetails.data.length !== 0 ) {
+
+                      responseObject = {
+
+                        id: getuserDetails?.data[ 0 ]?.id,
+                        firstName: getuserDetails?.data[ 0 ]?.firstName ? getuserDetails?.data[ 0 ]?.firstName : "",
+                        lastName: getuserDetails?.data[ 0 ]?.lastName ? getuserDetails?.data[ 0 ]?.lastName : "",
+                        username: getuserDetails?.data[ 0 ]?.username,
+                        roles: ( 'realm_access' in intro_token_response?.data && 'roles' in intro_token_response?.data?.realm_access ) ? intro_token_response?.data?.realm_access?.roles : [],
+                        realm: keycloakConfig[ "realm" ]
+                      };
+
+                      //Adding user custom attribute to our token object data.
+                      if ( getuserDetails.data[ 0 ].attributes ) {
+
+                        responseObject.attributes = getuserDetails.data[ 0 ].attributes;
+                      } else {
+
+                        responseObject.attributes = {};
+                      }
+
+                      delete config1.headers.Authorization;
+                      delete config1.data;
+
+                      //Fetching Groups data for each user.
+                      try {
+
+                        let teamData = await this.getUserSupervisedGroups( responseObject.id, admin_token, 'CX' );
+
+                        //Check for Permission Groups assignment and roles assignment against them
+                        const checkUserRoleAndPermissions = this.checkUserRoleAndPermissions( teamData, responseObject );
+
+                        if ( checkUserRoleAndPermissions.error ) {
+
+                          reject( {
+                            error_message: "Token Generation Error: Failed to generate a user access token while fetching cx user details for qm.",
+                            error_detail: {
+                              status: 403,
+                              reason: checkUserRoleAndPermissions.message
+                            }
+                          } );
+                        }
+
+                        delete teamData.permissionGroups;
+
+                        responseObject.userTeam = teamData.userTeam;
+                        responseObject.supervisedTeams = teamData.supervisedTeams;
+
+                      } catch ( er ) {
+
+                        reject( er );
+                      }
+
+                    } else {
+
+                      reject( {
+                        error_message: "User Details Fetch Error: Could not retrieve user information while fetching cx user details for qm.",
+                        error_detail: {
+                          status: 404,
+                          reason: `User Not Found: The specified username ${user_name} does not exist.`
+                        }
+                      } );
+
+                    }
+
+
+                  } catch ( er ) {
+
+                    error = await errorService.handleError( er );
+
+                    reject( {
+                      error_message: "Admin Token Generation Error: Failed to generate an admin access token while fetching cx user details for qm.",
+                      error_detail: error
+                    } );
+                  }
+                }
+
+              } catch ( er ) {
+
+                error = await errorService.handleError( er );
+
+                reject( {
+                  error_message: "Admin Token Generation Error: Failed to generate an admin access token while fetching cx user details for qm.",
+                  error_detail: error
+                } );
+
+              }
+            }
+
+            config = {
+
+              method: "post",
+              url: URL,
+              headers: {
+                Accept: "application/json",
+                "cache-control": "no-cache",
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              data: {
+                username: user_name,
+                password: keycloakConfig[ "SYNC_AGENT_PASSWORD" ],
+                client_id: keycloakConfig.CLIENT_ID,
+                client_secret: keycloakConfig.credentials.secret,
+                grant_type: keycloakConfig.GRANT_TYPE,
+              },
+
+            };
+
+            config.data.grant_type = "urn:ietf:params:oauth:grant-type:uma-ticket";
+            config.data.audience = keycloakConfig.CLIENT_ID;
+            config.headers.Authorization = "Bearer " + token;
+
+            //  T.O.K.E.N   R.E.Q.U.E.S.T   # 2   (A.C.C.E.S.S   T.O.K.E.N   W.I.T.H   P.E.R.M.I.S.S.I.O.N.S)
+            try {
+
+              let rptResponse = await requestController.httpRequest( config, true );
+
+              if ( rptResponse.data.access_token ) {
+                token = rptResponse.data.access_token;
+                refresh_token = rptResponse.data.refresh_token;
+
+                let userToken = token;
+                config.data.grant_type = keycloakConfig.GRANT_TYPE;
+                config.data.token = token;
+                URL = URL + "/introspect";
+                config.url = URL;
+
+                //  T.O.K.E.N   R.E.Q.U.E.S.T   # 3   (A.C.C.E.S.S   T.O.K.E.N   I.N.T.R.O.S.P.E.C.T.I.O.N)
+                try {
+
+                  let intrsopectionResponse = await requestController.httpRequest( config, true );
+                  intrsopectionResponse.data.access_token = token;
+
+                  responseObject.permittedResources = {
+                    Resources: ( intrsopectionResponse.data.authorization.permissions.length > 0 ) ? intrsopectionResponse.data.authorization.permissions : []
+                  }
+
+                  //  T.O.K.E.N   R.E.Q.U.E.S.T   # 4   ( A.D.M.I.N.  T.O.K.E.N)
+
+                  let finalObject = {
+
+                    keycloak_User: responseObject,
+
+                  };
+
+                  resolve( finalObject );
+
+                } catch ( er ) {
+
+                  error = await errorService.handleError( er );
+
+                  reject( {
+                    error_message: "Introspect Token Generation Error: Failed to generate an introspection token while fetching cx user details for qm.",
+                    error_detail: error
+                  } );
+
+                }
+
+              }
+
+            } catch ( er ) {
+
+              error = await errorService.handleError( er );
+
+              reject( {
+                error_message: "Rpt Token Fetch Error: Could not fetch the refresh token. Please ensure the user has the necessary roles, permissions, and groups" +
+                  ". e.g: agent user must be assigned agent role, agents_permission group & all required permissions are created" +
+                  ". every user must be assigned one team, if user is not part of any team then assign default team to User.",
+                error_detail: {
+                  "status": 403,
+                  "reason": "Missing role, team, or permissions to log in. Please check with your administrator."
+                }
+              } );
+
+            }
+
+
+
+          } catch ( er ) {
+
+            error = await errorService.handleError( er );
+
+            reject( {
+              error_message: "Token Generation Error: Failed to generate a user access introspect token for qm.",
+              error_detail: error
+            } );
+
+          }
+        }
+
+      } catch ( er ) {
+
+        error = await errorService.handleError( er );
+
+        reject( {
+          error_message: "Token Generation Error: Failed to generate a user access token for qm.",
+          error_detail: error
+        } );
+
+      }
+    } );
+
+  }
+
   async createTeamsAndMembers() {
 
   }

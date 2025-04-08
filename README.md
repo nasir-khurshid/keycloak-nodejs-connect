@@ -79,13 +79,13 @@ Sample `config` is given below:
   "resource": "keycloak_resource_name",
   "verify-token-audience": false,
   "credentials": {
-    "secret": "461d914e-4b22-4978-8c67-7fe0dfe45d86"
+    "secret": "<client_secret>"
   },
   "use-resource-role-mappings": true,
   "confidential-port": 0,
   "policy-enforcer": {},
   "CLIENT_ID": "keycloak_resource_name",
-  "CLIENT_DB_ID": "461d914e-4b22-4978-8c67-7fe0dfe45d86",
+  "CLIENT_DB_ID": "<client_secret>",
   "GRANT_TYPE": "password",
   "GRANT_TYPE_PAT": "client_credentials",
   "USERNAME_ADMIN": "admin_name",
@@ -94,7 +94,11 @@ Sample `config` is given below:
   "bearer-only": true,
   "TWILIO_SID": "yourTwilioSID",
   "TWILIO_AUTH_TOKEN": "yourTwilioAuthToken",
-  "TWILIO_VERIFY_SID": "yourTwilioVerifySID"
+  "TWILIO_VERIFY_SID": "yourTwilioVerifySID",
+  "ef-server-url": "https://<cx instance fqdn>/unified-admin/",
+  "FINESSE_USERNAME_ADMIN": "<cisco admin username>",
+  "FINESSE_PASSWORD_ADMIN": "<cisco admin username>",
+  "SYNC_AGENT_PASSWORD": "<qm sync agent/supervisor password>"
 }
 ```
 Here is the definition of each property defined in config file/object.
@@ -120,6 +124,9 @@ Here is the definition of each property defined in config file/object.
 - **TWILIO_AUTH_TOKEN:** Your Twilio account's Auth Token.
 - **TWILIO_VERIFY_SID:** Your Twilio account's Verify Service's SID.
 - *(Each property having TWILIO in its name is optional and is required only in the case of 2FA via SMS.)*
+- **ef-server-url:** Your ef server url where CX teams will be created/fetched.
+- **FINESSE_USERNAME_ADMIN:** Finesse Administrator Username of instance in use.
+- **FINESSE_PASSWORD_ADMIN:** Finesse Administrator Password of instance in use.
 
 For using keycloak-connect features:
 ```js
