@@ -586,58 +586,57 @@ class CiscoSyncService {
 
                     //Once users are synced, we fetch updated keycloak users list.
                     keycloakUsers = await this.fetchKeycloakUsers( keycloakConfig[ "auth-server-url" ], adminToken );
-                    console.log( keycloakUsers.map( user => {
-                        return {
-                            id: user.id,
-                            username: user.username
-                        }
-                    } ) );
 
-                    const ciscoUsernames = ciscoUsers.map( user => user.username.toLowerCase() );
-                    let uniqueKeycloakUsers = keycloakUsers.filter( user => !ciscoUsernames.includes( user.username.toLowerCase() ) );
+                    let userSyncedToMongo = await this.syncKeycloakUsersToCXMongo( keycloakConfig[ "USERNAME_ADMIN" ], keycloakConfig[ "PASSWORD_ADMIN" ], keycloakConfig[ "ef-server-url" ] );
 
-                    uniqueKeycloakUsers = uniqueKeycloakUsers.map( user => {
-                        return {
-                            id: user.id,
-                            username: user.username
-                        }
-                    } );
+                    if ( userSyncedToMongo == 200 ) {
 
-                    // Step 4: Assign Users to Teams
-                    let ciscoTeamsIds = ciscoTeams.map( team => Number( team.id ) );
-                    const cxTeamsMembers = await this.fetchCXTeamsMembers( keycloakConfig[ "ef-server-url" ], ciscoTeamsIds );
+                        const ciscoUsernames = ciscoUsers.map( user => user.username.toLowerCase() );
+                        let uniqueKeycloakUsers = keycloakUsers.filter( user => !ciscoUsernames.includes( user.username.toLowerCase() ) );
+
+                        uniqueKeycloakUsers = uniqueKeycloakUsers.map( user => {
+                            return {
+                                id: user.id,
+                                username: user.username
+                            }
+                        } );
+
+                        // Step 4: Assign Users to Teams
+                        let ciscoTeamsIds = ciscoTeams.map( team => Number( team.id ) );
+                        const cxTeamsMembers = await this.fetchCXTeamsMembers( keycloakConfig[ "ef-server-url" ], ciscoTeamsIds );
 
 
-                    let { agentsToAdd, agentsToRemove, supervisorsToAdd,
-                        supervisorsToRemove } = this.addOrRemoveAgentsOrSupervisors( ciscoUsers, cxTeamsMembers, keycloakUsers, uniqueKeycloakUsers );
+                        let { agentsToAdd, agentsToRemove, supervisorsToAdd,
+                            supervisorsToRemove } = this.addOrRemoveAgentsOrSupervisors( ciscoUsers, cxTeamsMembers, keycloakUsers, uniqueKeycloakUsers );
 
-                    const { cxAgents, cxSupervisors } = this.mapTeamMembersToKeycloak( ciscoTeams, cxTeamsMembers, uniqueKeycloakUsers );
+                        const { cxAgents, cxSupervisors } = this.mapTeamMembersToKeycloak( ciscoTeams, cxTeamsMembers, uniqueKeycloakUsers );
 
 
-                    //Remove Agents from wrong Teams (both CX and Cisco)
-                    ( Object.keys( agentsToRemove ).length > 0 ) && await this.removeAgentsFromTeams( keycloakConfig[ "ef-server-url" ], agentsToRemove );
-                    ( Object.keys( cxAgents ).length > 0 ) && await this.removeAgentsFromTeams( keycloakConfig[ "ef-server-url" ], cxAgents );
+                        //Remove Agents from wrong Teams (both CX and Cisco)
+                        ( Object.keys( agentsToRemove ).length > 0 ) && await this.removeAgentsFromTeams( keycloakConfig[ "ef-server-url" ], agentsToRemove );
+                        ( Object.keys( cxAgents ).length > 0 ) && await this.removeAgentsFromTeams( keycloakConfig[ "ef-server-url" ], cxAgents );
 
-                    //Add Agents To Team
-                    ( Object.keys( agentsToAdd ).length > 0 ) && await this.addAgentsToTeams( keycloakConfig[ "ef-server-url" ], agentsToAdd );
+                        //Add Agents To Team
+                        ( Object.keys( agentsToAdd ).length > 0 ) && await this.addAgentsToTeams( keycloakConfig[ "ef-server-url" ], agentsToAdd );
 
-                    //Remove Primary Supervisors from wrong Team (both CX and Cisco)
-                    ( Object.keys( supervisorsToRemove.primary ).length > 0 ) && await this.removePrimarySupervisorsFromTeams( keycloakConfig[ "ef-server-url" ], supervisorsToRemove.primary );
+                        //Remove Primary Supervisors from wrong Team (both CX and Cisco)
+                        ( Object.keys( supervisorsToRemove.primary ).length > 0 ) && await this.removePrimarySupervisorsFromTeams( keycloakConfig[ "ef-server-url" ], supervisorsToRemove.primary );
 
-                    ( Object.keys( cxSupervisors.primary ).length > 0 ) && await this.removePrimarySupervisorsFromTeams( keycloakConfig[ "ef-server-url" ], cxSupervisors.primary );
+                        ( Object.keys( cxSupervisors.primary ).length > 0 ) && await this.removePrimarySupervisorsFromTeams( keycloakConfig[ "ef-server-url" ], cxSupervisors.primary );
 
-                    //Remove Secondary Supervisors from wrong Team (both CX and Cisco)
-                    ( Object.keys( supervisorsToRemove.secondary ).length > 0 ) && await this.removeSecondarySupervisorsFromTeams( keycloakConfig[ "ef-server-url" ], supervisorsToRemove.secondary );
+                        //Remove Secondary Supervisors from wrong Team (both CX and Cisco)
+                        ( Object.keys( supervisorsToRemove.secondary ).length > 0 ) && await this.removeSecondarySupervisorsFromTeams( keycloakConfig[ "ef-server-url" ], supervisorsToRemove.secondary );
 
-                    ( Object.keys( cxSupervisors.secondary ).length > 0 ) && await this.removeSecondarySupervisorsFromTeams( keycloakConfig[ "ef-server-url" ], cxSupervisors.secondary );
+                        ( Object.keys( cxSupervisors.secondary ).length > 0 ) && await this.removeSecondarySupervisorsFromTeams( keycloakConfig[ "ef-server-url" ], cxSupervisors.secondary );
 
-                    //Add Primary Supervisors to Team
-                    ( Object.keys( supervisorsToAdd.primary ).length > 0 ) && await this.addPrimarySupervisorsToTeams( keycloakConfig[ "ef-server-url" ], supervisorsToAdd.primary );
+                        //Add Primary Supervisors to Team
+                        ( Object.keys( supervisorsToAdd.primary ).length > 0 ) && await this.addPrimarySupervisorsToTeams( keycloakConfig[ "ef-server-url" ], supervisorsToAdd.primary );
 
-                    //Add Secondary Supervisors To Team
-                    ( Object.keys( supervisorsToAdd.secondary ).length > 0 ) && await this.addSecondarySupervisorsToTeams( keycloakConfig[ "ef-server-url" ], supervisorsToAdd.secondary );
+                        //Add Secondary Supervisors To Team
+                        ( Object.keys( supervisorsToAdd.secondary ).length > 0 ) && await this.addSecondarySupervisorsToTeams( keycloakConfig[ "ef-server-url" ], supervisorsToAdd.secondary );
 
-                    resolve( 'Data synchronization complete!' );
+                        resolve( 'Data synchronization complete!' );
+                    }
 
                 } else {
 
@@ -792,6 +791,41 @@ class CiscoSyncService {
                 let tokenResponse = await requestController.httpRequest( config, true );
 
                 resolve( tokenResponse.data );
+
+            }
+            catch ( er ) {
+
+                reject( er );
+            }
+        } )
+    }
+
+    async syncKeycloakUsersToCXMongo( unifAdmUsername, unifAdmPassword, cxURL ) {
+
+        return new Promise( async ( resolve, reject ) => {
+
+            let URL = cxURL + 'keycloakLogin';
+
+            // Prepare the data object for the API request
+            const requestData = {
+                username: unifAdmUsername,
+                password: unifAdmPassword
+            };
+
+            let config = {
+                method: 'post',
+                url: URL,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                data: requestData
+            };
+
+            try {
+
+                let tokenResponse = await requestController.httpRequest( config, false );
+
+                resolve( tokenResponse?.data?.statusCode );
 
             }
             catch ( er ) {
@@ -956,7 +990,16 @@ class CiscoSyncService {
 
                 } catch ( err ) {
 
-                    reject( err );
+                    if ( err?.response?.data ) {
+
+                        reject( {
+                            status: err.response.status,
+                            reason: err.response.data,
+                        } );
+                    } else {
+
+                        reject( err );
+                    }
                 }
             }
 

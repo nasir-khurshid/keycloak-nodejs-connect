@@ -127,6 +127,8 @@ Here is the definition of each property defined in config file/object.
 - **ef-server-url:** Your ef server url where CX teams will be created/fetched.
 - **FINESSE_USERNAME_ADMIN:** Finesse Administrator Username of instance in use.
 - **FINESSE_PASSWORD_ADMIN:** Finesse Administrator Password of instance in use.
+- **FINESSE_URL**: Finesse Instance URL currently in use.
+- **SYNC_AGENT_PASSWORD**: Password for Users being synced to Keycloak/CX.
 
 For using keycloak-connect features:
 ```js
